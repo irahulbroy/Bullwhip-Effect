@@ -36,15 +36,16 @@ customer_demand, std_demand = generate_demand(T, mean_demand)
 
 # ---------------- Sidebar Variables ---------------- #
 st.sidebar.header("Decision Variables")
-# Lead time minimum changed to 1
-lead_time = st.sidebar.slider("Lead Time (L)", 1, 8, 1, help="Time periods between ordering and receiving.")
 
-# New Order Smoothing Parameter
-beta = st.sidebar.slider("Order Smoothing (β)", 0.1, 1.0, 0.4, help="1.0 = React instantly (Standard). Lower = smooth orders, absorb with inventory.")
+# DEFAULTS SET TO FAIL: High Bullwhip, Low Service Level
+lead_time = st.sidebar.slider("Lead Time (L)", 1, 8, 5, help="Time periods between ordering and receiving.")
 
-alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 0.90, 0.15, help="Higher = reacts faster to recent demand. Lower = smooths out noise.")
-order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.0, help="Panic ordering multiplier when stock is low.")
-safety_stock_multiplier = st.sidebar.slider("Safety Stock Multiplier (z)", 0.5, 4.0, 2.0, 0.1, help="Buffer against demand volatility.")
+# Min beta raised to 0.4 to prevent unrealistic "Anti-Bullwhip"
+beta = st.sidebar.slider("Order Smoothing (β)", 0.4, 1.0, 1.0, help="1.0 = React instantly (Standard). Lower = smooth orders.")
+
+alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 0.90, 0.70, help="Higher = reacts faster to recent demand. Lower = smooths out noise.")
+order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.3, help="Panic ordering multiplier when stock is low.")
+safety_stock_multiplier = st.sidebar.slider("Safety Stock Multiplier (z)", 0.5, 4.0, 0.5, 0.1, help="Buffer against demand volatility.")
 info_sharing = st.sidebar.checkbox("Enable Information Sharing", value=False, help="All stages can see the original customer demand.")
 
 # ---------------- Simulation Setup ---------------- #
