@@ -141,23 +141,6 @@ else:
 # ---------------- Visualizations ---------------- #
 st.markdown("### Order Amplification Visualization")
 colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
-fig, axs = plt.subplots(2, 2, figsize=(16, 8), sharey=True)
-axs = axs.flatten()
-
-for i in range(stages):
-    # Plot Customer Demand as baseline
-    axs[i].plot(customer_demand[burn_in:], color="black", alpha=0.3, label="Customer Demand")
-    # Plot Stage Orders
-    axs[i].plot(orders[i, burn_in:], label=f"{stage_names[i]} Orders", color=colors[i], linewidth=2)
-    
-    axs[i].set_title(f"{stage_names[i]} Variance", fontsize=12)
-    axs[i].legend(loc="upper left")
-    axs[i].grid(True, alpha=0.3)
-
-plt.tight_layout()
-st.pyplot(fig)# ---------------- Visualizations ---------------- #
-st.markdown("### Order Amplification Visualization")
-colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
 
 # 1. Increased figsize for a much larger overall plot canvas
 fig, axs = plt.subplots(2, 2, figsize=(20, 14), sharey=True)
