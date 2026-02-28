@@ -139,30 +139,38 @@ else:
     st.warning("⚠ **System Unstable or Unresponsive.** Review your trade-offs between buffering and forecasting.")
 
 # ---------------- Visualizations ---------------- #
-st.markdown("### Order Amplification Visualization")
-colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
+st.markdown("### Demand and Order Visualization")
 
-# 1. Increased figsize for a much larger overall plot canvas
+# 1. Separate Customer Demand Plot
+fig_cust, ax_cust = plt.subplots(figsize=(20, 5))
+ax_cust.plot(customer_demand[burn_in:], color="black", linewidth=3, label="Customer Demand")
+ax_cust.set_title("Original Customer Demand", fontsize=22, fontweight='bold')
+ax_cust.set_ylabel("Units", fontsize=18)
+ax_cust.set_xlabel("Time Period", fontsize=18)
+ax_cust.tick_params(axis='both', which='major', labelsize=16)
+ax_cust.legend(loc="upper left", fontsize=16)
+ax_cust.grid(True, alpha=0.4)
+st.pyplot(fig_cust)
+
+st.markdown("---")
+
+# 2. 2x2 Amplification Plots
+colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
 fig, axs = plt.subplots(2, 2, figsize=(20, 14), sharey=True)
 axs = axs.flatten()
 
 for i in range(stages):
-    # 2. Thicker lines (linewidth=3) for better visibility
-    axs[i].plot(customer_demand[burn_in:], color="black", alpha=0.3, label="Customer Demand", linewidth=3)
+    # Faded customer demand as a baseline
+    axs[i].plot(customer_demand[burn_in:], color="black", alpha=0.2, label="Customer Demand", linewidth=3)
+    # Actual stage orders
     axs[i].plot(orders[i, burn_in:], label=f"{stage_names[i]} Orders", color=colors[i], linewidth=3)
     
-    # 3. Larger titles and axis labels
     axs[i].set_title(f"{stage_names[i]} Variance", fontsize=22, fontweight='bold')
     axs[i].set_ylabel("Units", fontsize=18)
     axs[i].set_xlabel("Time Period", fontsize=18)
-    
-    # 4. Larger tick marks on the axes
     axs[i].tick_params(axis='both', which='major', labelsize=16)
-    
-    # 5. Larger legend text
     axs[i].legend(loc="upper left", fontsize=16)
     axs[i].grid(True, alpha=0.4)
 
-# Adjust layout so the larger text doesn't overlap
 plt.tight_layout(pad=3.0)
 st.pyplot(fig)
