@@ -26,24 +26,23 @@ Balance stability (low bullwhip) and responsiveness (high service level).
 st.sidebar.header("Decision Variables")
 
 T = 400
-lead_time = st.sidebar.slider("Lead Time", 1, 8, 4)  # realistic L
-alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 0.9, 0.4)  # min>0
+lead_time = st.sidebar.slider("Lead Time", 1, 8, 4)
+alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 0.9, 0.4)
 order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.3)
 info_sharing = st.sidebar.checkbox("Information Sharing", value=False)
 
-np.random.seed()  # dynamic shocks each run
+np.random.seed()  # ensure new run each time
 
+# ---- Customer demand ----
 mean_demand = 100
-std_demand = np.random.randint(15, 30)  # random baseline variance each run
+std_demand = np.random.randint(20, 50)  # random baseline variance
 customer_demand = np.random.normal(mean_demand, std_demand, T)
+original_customer_demand = customer_demand.copy()  # store fixed copy
 
-# ---- Random Dynamic Shocks ----
-num_shocks = np.random.randint(1, 4)  # 1–3 spikes
-for _ in range(num_shocks):
-    shock_start = np.random.randint(50, T-20)
-    shock_length = np.random.randint(5, 20)
-    shock_magnitude = np.random.randint(50, 100)
-    customer_demand[shock_start:shock_start+shock_length] += shock_magnitude
+# ---- Hidden multiplicative shocks ----
+for t in range(T):
+    if np.random.rand() < 0.02:  # ~2% chance of multiplicative spike each period
+        customer_demand[t] *= np.random.uniform(1.2, 1.5)
 
 stages = 4
 orders = np.zeros((stages, T))
@@ -61,26 +60,27 @@ for t in range(1, T):
         else:
             demand = orders[i-1, t-1]
 
+        # Forecast
         if info_sharing:
             demand_for_forecast = customer_demand[t]
         else:
             demand_for_forecast = demand
 
         forecast[i, t] = alpha * demand_for_forecast + (1 - alpha) * forecast[i, t-1]
-        
-        # Add small safety stock random noise to prevent trivial low L solution
+
+        # Base stock with small safety stock to prevent trivial low-L solutions
         safety_stock = np.random.randint(5, 15)
         base_stock = forecast[i, t] * (lead_time + 1) + safety_stock
 
         raw_order = base_stock - inventory_position[i, t-1]
-        orders[i, t] = order_multiplier * raw_order
+        orders[i, t] = max(order_multiplier * raw_order, 0)  # cannot order negative
         inventory_position[i, t] = inventory_position[i, t-1] + orders[i, t] - demand
 
         if inventory_position[i, t] < 0:
             stockouts[i, t] = 1
 
 # ---- Bullwhip Ratios ----
-bullwhip = [np.var(orders[i, 100:]) / np.var(customer_demand[100:]) for i in range(stages)]
+bullwhip = [np.var(orders[i, 100:]) / np.var(original_customer_demand[100:]) for i in range(stages)]
 
 st.subheader("📊 Bullwhip Ratios")
 for i in range(stages):
@@ -98,7 +98,6 @@ for i in range(stages):
 # ---- Stability Score ----
 avg_bullwhip = np.mean(bullwhip)
 avg_service = np.mean(service_levels)
-stability_score = avg_bullwhip + 2*(1 - avg_service)
 st.subheader("🏆 Stability Score")
 st.write(f"Score (Lower is Better): {stability_score:.2f}")
 
@@ -111,8 +110,8 @@ else:
 
 # ---- Customer Demand Plot ----
 fig_cust, ax = plt.subplots(figsize=(14,4))
-ax.plot(customer_demand, color="black", label="Customer Demand", linewidth=2)
-ax.set_title("Customer Demand (with Random Shocks)")
+ax.plot(original_customer_demand, color="black", label="Customer Demand", linewidth=2)
+ax.set_title("Customer Demand")
 ax.legend()
 st.pyplot(fig_cust)
 
