@@ -4,23 +4,31 @@ import streamlit as st
 import io
 import qrcode
 
-st.title("📦 Bullwhip Effect – Interactive Model")
+st.title("📦 Bullwhip Effect Decision Lab")
+
+TARGET = 1.8
+SERVICE_TARGET = 0.95
+
+st.header(f"🎯 Challenge: Reduce Bullwhip below {TARGET} at ALL stages AND Maintain Service Level ≥ {int(SERVICE_TARGET*100)}%")
 
 st.markdown("""
-### Supply Chain Hierarchy  
+Supply Chain:  
 Customer → Retailer → Wholesaler → Distributor → Manufacturer  
 
-Orders move upstream.  
-Demand information may or may not.
+You must balance:
+- Stability (low bullwhip)
+- Responsiveness (high service level)
 """)
 
-# Sidebar controls
-st.sidebar.header("Key Drivers of Bullwhip")
+# ---------------- Sidebar ---------------- #
 
-T = st.sidebar.slider("Time Periods", 150, 500, 300)
-lead_time = st.sidebar.slider("Lead Time", 1, 8, 3)
-alpha = st.sidebar.slider("Forecast Smoothing (α)", 0.01, 1.0, 0.4)
-info_sharing = st.sidebar.checkbox("Information Sharing (All observe customer demand)")
+st.sidebar.header("Decision Variables")
+
+T = 400
+lead_time = st.sidebar.slider("Lead Time", 1, 8, 4)
+alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.01, 1.0, 0.6)
+order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.3)
+info_sharing = st.sidebar.checkbox("Information Sharing", value=False)
 
 np.random.seed(42)
 
@@ -28,81 +36,91 @@ mean_demand = 100
 std_demand = 20
 customer_demand = np.random.normal(mean_demand, std_demand, T)
 
+# ---- Promotion Shock ----
+customer_demand[180:200] += 80
+
 stages = 4
 orders = np.zeros((stages, T))
 forecast = np.ones((stages, T)) * mean_demand
 inventory_position = np.ones((stages, T)) * mean_demand * (lead_time + 1)
+stockouts = np.zeros((stages, T))
 
 for t in range(1, T):
     for i in range(stages):
-        
-        # Demand seen by stage
+
         if i == 0:
             demand = customer_demand[t]
         else:
             demand = orders[i-1, t-1]
-        
-        # Forecast input
+
         if info_sharing:
             demand_for_forecast = customer_demand[t]
         else:
             demand_for_forecast = demand
-        
-        # Exponential smoothing
-        forecast[i, t] = alpha * demand_for_forecast + (1 - alpha) * forecast[i, t-1]
-        
-        base_stock = forecast[i, t] * (lead_time + 1)
-        
-        # Order-up-to logic
-        orders[i, t] = base_stock - inventory_position[i, t-1]
-        
-        # Update inventory position
-        inventory_position[i, t] = (
-            inventory_position[i, t-1] 
-            + orders[i, t] 
-            - demand
-        )
 
-# ---- Bullwhip Calculation ----
+        forecast[i, t] = alpha * demand_for_forecast + (1 - alpha) * forecast[i, t-1]
+        base_stock = forecast[i, t] * (lead_time + 1)
+
+        raw_order = base_stock - inventory_position[i, t-1]
+        inflated_order = order_multiplier * raw_order
+        orders[i, t] = inflated_order
+
+        inventory_position[i, t] = inventory_position[i, t-1] + orders[i, t] - demand
+
+        if inventory_position[i, t] < 0:
+            stockouts[i, t] = 1
+
+# ---------------- Bullwhip ---------------- #
 
 bullwhip = []
 for i in range(stages):
-    ratio = np.var(orders[i, 50:]) / np.var(customer_demand[50:])
+    ratio = np.var(orders[i, 100:]) / np.var(customer_demand[100:])
     bullwhip.append(ratio)
-
-st.subheader("📊 Bullwhip Ratio (Variance Amplification)")
-st.markdown("""
-**Bullwhip Ratio = Var(Stage Orders) / Var(Customer Demand)**  
-Values > 1 indicate amplification.
-""")
-
-for i, name in enumerate(["Retailer", "Wholesaler", "Distributor", "Manufacturer"]):
-    st.write(f"{name}: {bullwhip[i]:.2f}")
-
-# ---- Plot 1: Time Series ----
-
-fig1, ax1 = plt.subplots(figsize=(10,6))
-
-ax1.plot(customer_demand, label="Customer Demand", linewidth=2)
-ax1.plot(orders[0], label="Retailer Orders")
-ax1.plot(orders[1], label="Wholesaler Orders")
-ax1.plot(orders[2], label="Distributor Orders")
-ax1.plot(orders[3], label="Manufacturer Orders")
-
-ax1.set_title("Demand and Orders Over Time")
-ax1.legend()
-st.pyplot(fig1)
-
-# ---- Plot 2: Bullwhip Bar Chart ----
-
-fig2, ax2 = plt.subplots()
 
 stage_names = ["Retailer", "Wholesaler", "Distributor", "Manufacturer"]
 
+st.subheader("📊 Bullwhip Ratios")
+for i in range(stages):
+    st.write(f"{stage_names[i]}: {bullwhip[i]:.2f}")
+
+# ---------------- Service Level ---------------- #
+
+service_levels = 1 - stockouts.mean(axis=1)
+
+st.subheader("📦 Service Levels")
+for i in range(stages):
+    st.write(f"{stage_names[i]}: {service_levels[i]*100:.1f}%")
+
+# ---------------- Scoreboard ---------------- #
+
+avg_bullwhip = np.mean(bullwhip)
+avg_service = np.mean(service_levels)
+
+stability_score = avg_bullwhip + 2*(1 - avg_service)
+
+st.subheader("🏆 Stability Score")
+st.write(f"Score (Lower is Better): {stability_score:.2f}")
+
+success = all(r < TARGET for r in bullwhip) and all(s >= SERVICE_TARGET for s in service_levels)
+
+if success:
+    st.success("✅ Challenge Completed! Balanced and Stable Supply Chain.")
+else:
+    st.warning("⚠ Not Yet Stable. Adjust Decisions.")
+
+# ---------------- Plots ---------------- #
+
+for i in range(stages):
+    fig, ax = plt.subplots(figsize=(8,4))
+    ax.plot(customer_demand, label="Customer Demand", linewidth=2)
+    ax.plot(orders[i], label=f"{stage_names[i]} Orders")
+    ax.set_title(f"{stage_names[i]} vs Customer Demand")
+    ax.legend()
+    st.pyplot(fig)
+
+fig2, ax2 = plt.subplots()
 ax2.bar(stage_names, bullwhip)
 ax2.axhline(1, linestyle="--")
-
-ax2.set_title("Bullwhip Effect Across Supply Chain")
+ax2.set_title("Bullwhip Amplification")
 ax2.set_ylabel("Variance Ratio")
-
 st.pyplot(fig2)
