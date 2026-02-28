@@ -15,9 +15,7 @@ st.markdown("""
 Supply Chain:  
 Customer → Retailer → Wholesaler → Distributor → Manufacturer  
 
-You must balance:
-- Stability (low bullwhip)
-- Responsiveness (high service level)
+Balance stability (low bullwhip) and responsiveness (high service level).
 """)
 
 # ---------------- Sidebar ---------------- #
@@ -27,7 +25,7 @@ st.sidebar.header("Decision Variables")
 T = 400
 lead_time = st.sidebar.slider("Lead Time", 1, 8, 4)
 alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.01, 1.0, 0.6)
-order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.3)
+order_multiplier = st.sidebar.slider("Shortage Gaming", 1.0, 2.0, 1.3)
 info_sharing = st.sidebar.checkbox("Information Sharing", value=False)
 
 np.random.seed(42)
@@ -96,10 +94,8 @@ for i in range(stages):
 avg_bullwhip = np.mean(bullwhip)
 avg_service = np.mean(service_levels)
 
-stability_score = avg_bullwhip + 2*(1 - avg_service)
-
 st.subheader("🏆 Stability Score")
-st.write(f"Score (Lower is Better): {stability_score:.2f}")
+st.write(f"Score (Lower is Better): {avg_bullwhip + 2*(1 - avg_service):.2f}")
 
 success = all(r < TARGET for r in bullwhip) and all(s >= SERVICE_TARGET for s in service_levels)
 
@@ -108,19 +104,26 @@ if success:
 else:
     st.warning("⚠ Not Yet Stable. Adjust Decisions.")
 
-# ---------------- Plots ---------------- #
+# ---------------- 2x2 Plots ---------------- #
+
+colors = ["blue", "orange", "green", "red"]
+fig, axs = plt.subplots(2, 2, figsize=(12,8))
+axs = axs.flatten()
 
 for i in range(stages):
-    fig, ax = plt.subplots(figsize=(8,4))
-    ax.plot(customer_demand, label="Customer Demand", linewidth=2)
-    ax.plot(orders[i], label=f"{stage_names[i]} Orders")
-    ax.set_title(f"{stage_names[i]} vs Customer Demand")
-    ax.legend()
-    st.pyplot(fig)
+    axs[i].plot(customer_demand, label="Customer Demand", color="darkgray", linewidth=2)
+    axs[i].plot(orders[i], label=f"{stage_names[i]} Orders", color=colors[i])
+    axs[i].set_title(f"{stage_names[i]} vs Customer Demand")
+    axs[i].legend()
+
+plt.tight_layout()
+st.pyplot(fig)
+
+# ---------------- Bar Plot ---------------- #
 
 fig2, ax2 = plt.subplots()
-ax2.bar(stage_names, bullwhip)
-ax2.axhline(1, linestyle="--")
-ax2.set_title("Bullwhip Amplification")
+ax2.bar(stage_names, bullwhip, color=colors)
+ax2.axhline(1, linestyle="--", color="black")
+ax2.set_title("Bullwhip Amplification Across Supply Chain")
 ax2.set_ylabel("Variance Ratio")
 st.pyplot(fig2)
