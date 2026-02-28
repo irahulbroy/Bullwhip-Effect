@@ -26,19 +26,19 @@ Balance stability (low bullwhip) and responsiveness (high service level).
 st.sidebar.header("Decision Variables")
 
 T = 400
-lead_time = st.sidebar.slider("Lead Time", 2, 8, 4)  # min=2
-alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 1.0, 0.4)  # min=0.05
+lead_time = st.sidebar.slider("Lead Time", 1, 8, 4)  # realistic L
+alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 0.9, 0.4)  # min>0
 order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.3)
 info_sharing = st.sidebar.checkbox("Information Sharing", value=False)
 
-np.random.seed()  # random each run
+np.random.seed()  # dynamic shocks each run
 
 mean_demand = 100
-std_demand = np.random.randint(15, 30)  # random baseline noise
+std_demand = np.random.randint(15, 30)  # random baseline variance each run
 customer_demand = np.random.normal(mean_demand, std_demand, T)
 
 # ---- Random Dynamic Shocks ----
-num_shocks = np.random.randint(1, 4)  # 1-3 spikes
+num_shocks = np.random.randint(1, 4)  # 1–3 spikes
 for _ in range(num_shocks):
     shock_start = np.random.randint(50, T-20)
     shock_length = np.random.randint(5, 20)
@@ -67,7 +67,10 @@ for t in range(1, T):
             demand_for_forecast = demand
 
         forecast[i, t] = alpha * demand_for_forecast + (1 - alpha) * forecast[i, t-1]
-        base_stock = forecast[i, t] * (lead_time + 1)
+        
+        # Add small safety stock random noise to prevent trivial low L solution
+        safety_stock = np.random.randint(5, 15)
+        base_stock = forecast[i, t] * (lead_time + 1) + safety_stock
 
         raw_order = base_stock - inventory_position[i, t-1]
         orders[i, t] = order_multiplier * raw_order
@@ -81,7 +84,10 @@ bullwhip = [np.var(orders[i, 100:]) / np.var(customer_demand[100:]) for i in ran
 
 st.subheader("📊 Bullwhip Ratios")
 for i in range(stages):
-    st.write(f"{stage_names[i]}: {bullwhip[i]:.2f}")
+    if bullwhip[i] > TARGET:
+        st.markdown(f"<span style='color:red'>{stage_names[i]}: {bullwhip[i]:.2f} (Exceeds Target)</span>", unsafe_allow_html=True)
+    else:
+        st.write(f"{stage_names[i]}: {bullwhip[i]:.2f}")
 
 # ---- Service Levels ----
 service_levels = 1 - stockouts.mean(axis=1)
@@ -116,7 +122,6 @@ fig, axs = plt.subplots(2, 2, figsize=(16,12))
 axs = axs.flatten()
 for i in range(stages):
     axs[i].plot(orders[i], label=f"{stage_names[i]} Orders", color=colors[i], linewidth=2)
-    axs[i].axhline(y=np.var(customer_demand[100:]) * TARGET, color="red", linestyle="--", alpha=0.7, label="Bullwhip Target")
     axs[i].set_title(f"{stage_names[i]} Orders Over Time")
     axs[i].legend()
 plt.tight_layout()
