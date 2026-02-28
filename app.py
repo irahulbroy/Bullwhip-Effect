@@ -180,3 +180,15 @@ for i in range(stages):
 
 plt.tight_layout(pad=3.0)
 st.pyplot(fig)
+
+# ---------------- Footer / Copyright ---------------- #
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; color: gray; font-size: 14px;'>
+        &copy; 2026 Rahul Roy. All Rights Reserved.<br>
+        <i>This educational simulation may not be reproduced or distributed without explicit permission.</i>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
