@@ -98,6 +98,7 @@ for i in range(stages):
 # ---- Stability Score ----
 avg_bullwhip = np.mean(bullwhip)
 avg_service = np.mean(service_levels)
+stability_score = avg_bullwhip + 2*(1 - avg_service) 
 st.subheader("🏆 Stability Score")
 st.write(f"Score (Lower is Better): {stability_score:.2f}")
 
