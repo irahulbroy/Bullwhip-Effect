@@ -15,7 +15,6 @@ st.markdown("""
 """)
 
 # ---------------- Cached Demand Generation ---------------- #
-# This ensures demand stays identical when widgets are toggled
 @st.cache_data
 def generate_demand(T, mean_demand):
     np.random.seed(42) # Fixed seed so all students face the exact same scenario
@@ -37,10 +36,15 @@ customer_demand, std_demand = generate_demand(T, mean_demand)
 
 # ---------------- Sidebar Variables ---------------- #
 st.sidebar.header("Decision Variables")
-lead_time = st.sidebar.slider("Lead Time (L)", 2, 8, 4, help="Time periods between ordering and receiving.")
-alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 0.90, 0.40, help="Higher = reacts faster to recent demand. Lower = smooths out noise.")
-order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.3, help="Panic ordering multiplier when stock is low.")
-safety_stock_multiplier = st.sidebar.slider("Safety Stock Multiplier (z)", 0.5, 3.0, 1.0, 0.1, help="Buffer against demand volatility.")
+# Lead time minimum changed to 1
+lead_time = st.sidebar.slider("Lead Time (L)", 1, 8, 1, help="Time periods between ordering and receiving.")
+
+# New Order Smoothing Parameter
+beta = st.sidebar.slider("Order Smoothing (β)", 0.1, 1.0, 0.4, help="1.0 = React instantly (Standard). Lower = smooth orders, absorb with inventory.")
+
+alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 0.90, 0.15, help="Higher = reacts faster to recent demand. Lower = smooths out noise.")
+order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.0, help="Panic ordering multiplier when stock is low.")
+safety_stock_multiplier = st.sidebar.slider("Safety Stock Multiplier (z)", 0.5, 4.0, 2.0, 0.1, help="Buffer against demand volatility.")
 info_sharing = st.sidebar.checkbox("Enable Information Sharing", value=False, help="All stages can see the original customer demand.")
 
 # ---------------- Simulation Setup ---------------- #
@@ -54,12 +58,11 @@ on_hand = np.zeros((stages, T))
 stockouts = np.zeros((stages, T))
 
 # Static safety stock based on demand variance and lead time
-# Formula: z * sigma * sqrt(L+1)
 fixed_safety_stock = safety_stock_multiplier * std_demand * np.sqrt(lead_time + 1)
 
 # Initialize steady state inventory
 for i in range(stages):
-    on_hand[i, 0] = fixed_safety_stock + (mean_demand * 1.5) # Modest starting buffer
+    on_hand[i, 0] = fixed_safety_stock + (mean_demand * 1.5)
 
 # ---------------- Core Simulation Loop ---------------- #
 for t in range(1, T):
@@ -68,9 +71,9 @@ for t in range(1, T):
         if i == 0:
             demand = customer_demand[t]
         else:
-            demand = orders[i-1, t] # Immediate upstream order
+            demand = orders[i-1, t]
 
-        # 2. Receive Shipments (Lead Time Delay)
+        # 2. Receive Shipments
         if t >= lead_time:
             arriving_order = orders[i, t - lead_time]
         else:
@@ -79,33 +82,35 @@ for t in range(1, T):
         # 3. Update physical inventory
         on_hand[i, t] = on_hand[i, t-1] + arriving_order - demand
 
-        # 4. Check Stockouts (Lost Sales model)
+        # 4. Check Stockouts
         if on_hand[i, t] < 0:
             stockouts[i, t] = 1
-            on_hand[i, t] = 0 # Cannot have negative physical boxes
+            on_hand[i, t] = 0 
 
-        # 5. Forecasting (Information sharing bypasses local demand)
+        # 5. Forecasting
         demand_for_forecast = customer_demand[t] if info_sharing else demand
         forecast[i, t] = alpha * demand_for_forecast + (1 - alpha) * forecast[i, t-1]
 
-        # 6. Calculate Pipeline Inventory (goods in transit)
+        # 6. Calculate Pipeline Inventory
         pipeline_inventory = np.sum(orders[i, max(0, t - lead_time):t])
         inventory_position = on_hand[i, t] + pipeline_inventory
 
-        # 7. Order Generation (Base Stock Policy)
-        # Target = Expected demand over Lead Time + Safety Stock
+        # 7. Order Generation (Proportional Order-Up-To Policy)
         target_base_stock = (forecast[i, t] * (lead_time + 1)) + fixed_safety_stock
         
-        raw_order = max(target_base_stock - inventory_position, 0)
+        # Pure OUT gap
+        pure_out_order = target_base_stock - inventory_position
         
-        # Apply shortage gaming (panic ordering) if inventory position is low
-        if raw_order > mean_demand:
+        # SMOOTHED ORDER CALCULATION: Blend forecast with the gap based on Beta
+        raw_order = max((1 - beta) * forecast[i, t] + beta * pure_out_order, 0)
+        
+        # Apply shortage gaming (panic ordering)
+        if raw_order > mean_demand and raw_order > 0: # Added a >0 check to be safe
             raw_order *= order_multiplier
             
         orders[i, t] = raw_order
 
 # ---------------- Metrics Calculation ---------------- #
-# Discard the first 100 periods as "warm up" to avoid initial state bias
 burn_in = 100
 bullwhip = [np.var(orders[i, burn_in:]) / np.var(customer_demand[burn_in:]) for i in range(stages)]
 service_levels = 1 - stockouts[:, burn_in:].mean(axis=1)
@@ -154,14 +159,14 @@ st.pyplot(fig_cust)
 
 st.markdown("---")
 
-# 2. 2x2 Amplification Plots
+# 2. 2x2 Amplification Plots (Cleaned Up)
 colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]
 fig, axs = plt.subplots(2, 2, figsize=(20, 14), sharey=True)
 axs = axs.flatten()
 
 for i in range(stages):
-    # Faded customer demand as a baseline
-    axs[i].plot(customer_demand[burn_in:], color="black", alpha=0.2, label="Customer Demand", linewidth=3)
+    # Customer Demand plot REMOVED from here
+    
     # Actual stage orders
     axs[i].plot(orders[i, burn_in:], label=f"{stage_names[i]} Orders", color=colors[i], linewidth=3)
     
