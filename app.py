@@ -29,20 +29,21 @@ T = 400
 lead_time = st.sidebar.slider("Lead Time", 1, 8, 4)
 alpha = st.sidebar.slider("Forecast Responsiveness (α)", 0.05, 0.9, 0.4)
 order_multiplier = st.sidebar.slider("Order Cushioning (Shortage Gaming)", 1.0, 2.0, 1.3)
+safety_stock_multiplier = st.sidebar.slider("Safety Stock Multiplier", 0.5, 3.0, 1.0, 0.1)
 info_sharing = st.sidebar.checkbox("Information Sharing", value=False)
 
-np.random.seed()  # ensure new run each time
+np.random.seed()  # new run each time
 
 # ---- Customer demand ----
 mean_demand = 100
-std_demand = np.random.randint(20, 50)  # random baseline variance
+std_demand = np.random.randint(20, 50)
 customer_demand = np.random.normal(mean_demand, std_demand, T)
 original_customer_demand = customer_demand.copy()  # store fixed copy
 
 # ---- Hidden multiplicative shocks ----
 for t in range(T):
-    if np.random.rand() < 0.02:  # ~2% chance of multiplicative spike each period
-        customer_demand[t] *= np.random.uniform(1.2, 1.5)
+    if np.random.rand() < 0.02:  # 2% chance per period
+        customer_demand[t] *= np.random.uniform(1.3, 1.6)
 
 stages = 4
 orders = np.zeros((stages, T))
@@ -68,12 +69,12 @@ for t in range(1, T):
 
         forecast[i, t] = alpha * demand_for_forecast + (1 - alpha) * forecast[i, t-1]
 
-        # Base stock with small safety stock to prevent trivial low-L solutions
-        safety_stock = np.random.randint(5, 15)
+        # Base stock with safety stock multiplier
+        safety_stock = np.random.randint(5, 15) * safety_stock_multiplier
         base_stock = forecast[i, t] * (lead_time + 1) + safety_stock
 
-        raw_order = base_stock - inventory_position[i, t-1]
-        orders[i, t] = max(order_multiplier * raw_order, 0)  # cannot order negative
+        raw_order = max(order_multiplier * (base_stock - inventory_position[i, t-1]), 0)
+        orders[i, t] = raw_order
         inventory_position[i, t] = inventory_position[i, t-1] + orders[i, t] - demand
 
         if inventory_position[i, t] < 0:
@@ -98,7 +99,7 @@ for i in range(stages):
 # ---- Stability Score ----
 avg_bullwhip = np.mean(bullwhip)
 avg_service = np.mean(service_levels)
-stability_score = avg_bullwhip + 2*(1 - avg_service) 
+stability_score = avg_bullwhip + 2*(1 - avg_service)
 st.subheader("🏆 Stability Score")
 st.write(f"Score (Lower is Better): {stability_score:.2f}")
 
